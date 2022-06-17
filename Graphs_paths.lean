@@ -21,38 +21,14 @@ def length{V: Type}{E: Type}{graph: Graph V E}{x y: V}: EdgePath graph x y → N
 
 open EdgePath
 
-theorem lemma2 {G : Graph V E} {x y : V}{h3 :  Prop} : (x = y) → (h3 : (single x) = single y ):=
-by 
-intro h
-exact congrArg (fun x => single x) h
-
-/-theorem lemma2  {V : Type} {E : Type} (G : Graph V E) {x y z : V} (p : EdgePath G x z) (h : x = y) : EdgePath G y z :=
-match h with
-| rfl => p
-
-def follow {V : Type} {E : Type} (G : Graph V E) (x y : V) (p : EdgePath G x y) : V :=
-match p with
-| single x => x
-| cons ex h1 h2 exy => term G ex
-
-
-def forward {V : Type} {E : Type} {G : Graph V E} {x y : V} (p : EdgePath G x y) :  EdgePath G _ y :=
-match p with
-| cons ex h1 h2 exy => --have h : (follow G x _ p) = term G ex := sorry 
-                         exy 
-| single x => sorry
-
-
-def next {V : Type} {E : Type} {G : Graph V E} {x y : V}: EdgePath G x y → E
-| single x => G.null
-| cons ex h1 h2 exy => ex-/
-
 -- concatenates two edgepaths 
-def multiply {V : Type} {E : Type} {G : Graph V E} {x y z : V}: (EdgePath G x y) → (EdgePath G y z) → (EdgePath G x z) 
-| single x , single y => single x 
-|  single x , cons ey h1 h2 eyz => cons ey h1 h2 eyz
-| cons ex h1 h2 exy , single y => cons ex h1 h2 exy
-| cons ex h1 h2 exy , cons ey h3 h4 eyz => cons ex h1 h2 (multiply exy (cons ey h3 h4 eyz))
+def multiply {V : Type} {E : Type} {G : Graph V E} {x y z : V}: (EdgePath G x y) → (EdgePath G y z) → (EdgePath G x z) := by 
+intro p q
+match p with
+| single x =>exact q
+| cons ex h1 h2 exy => exact (cons ex h1 h2 (multiply exy q))
+
+
 
 --proves that the endpoint of the reverse of an edge is the start point of the edge
 theorem lemma1 {V : Type} {E : Type} {G : Graph V E} {x : V}{e : E}: G.init e = x → (term G (G.bar e) = x) :=
@@ -62,26 +38,53 @@ have h1 : G.bar (G.bar e) = e := congr G.barInv (Eq.refl e)
 have h2 : G.init (G.bar (G.bar e)) = G.init e := congrArg G.init h1 
 apply Eq.trans h2 h
 
+
+-- proves associativity of path multiplication
+theorem mulassoc {G : Graph V E} (p : EdgePath G w x) (q : EdgePath G x y) (r : EdgePath G y z):
+      (multiply (multiply p q) r) = (multiply p (multiply q r)) := by
+      induction p with
+      | single w => 
+        calc 
+        multiply (multiply (single w) q) r = multiply q r := by rfl
+        _ = multiply (single w) (multiply q r) := by rfl
+      | cons ex h1 h2 exy ih => 
+        calc 
+        multiply (multiply (cons ex h1 h2 exy) q) r = multiply (cons ex h1 h2 (multiply exy q)) r := by rfl
+        _ = cons ex h1 h2 (multiply (multiply exy q) r) := by rfl
+        _ = cons ex h1 h2 (multiply exy (multiply q r)) := by rw[ih]
+        _ = multiply (cons ex h1 h2 exy) (multiply q r) := by rfl
+
+
 -- reverses an edgepath
 def inverse {V : Type} {E : Type} {G : Graph V E} {x y : V}: (EdgePath G x y) → (EdgePath G y x)
 | single x => single x 
 | cons ex h1 h2 exy => multiply (inverse exy) (cons (G.bar (ex)) h2 (lemma1 h1) (single x)) 
 
--- redu
+--reduces given path such that its first two edges are not inverses of each other
+def reducePath0 {G : Graph V E} {x y : V} : EdgePath G x y→ EdgePath G x y
+| single x => single x
+| cons ex h1 h2 (single y) => cons ex h1 h2 (single y)
+| cons ex h1 h2 (cons ey h3 h4 (eyz)) => 
+        if c : (x = term G ey) ∧ (ey = G.bar (ex)) then
+              Eq.symm (Eq.trans (And.left c) h4) ▸ eyz
+            else
+            cons ex h1 h2 (cons ey h3 h4 (eyz))
+
+-- reduces given path such that no two consecutive edges are inverses of each other
 def reducePath {G : Graph V E} {x y : V} : EdgePath G x y→ EdgePath G x y
 | single x => single x
 | cons ex h1 h2 (single y) => cons ex h1 h2 (single y)
 | cons ex h1 h2 (cons ey h3 h4 (eyz)) => 
-    if c : x = term G ey then
-      if ey = G.bar (ey) then
-      Eq.symm (Eq.trans c h4) ▸ eyz
-      else
-      cons ex h1 h2 (cons ey h3 h4 (reducePath eyz))
+    let eyz' := reducePath eyz 
+    if c : (x = term G ey) ∧ (ey = G.bar (ex)) then
+      Eq.symm (Eq.trans (And.left c) h4) ▸ eyz'
     else
-    cons ex h1 h2 (cons ey h3 h4 (reducePath eyz))
+      reducePath0 (cons ex h1 h2 (reducePath0 (cons ey h3 h4 (eyz'))))
+
+#check @EdgePath
 
 
-inductive homotopy {G : Graph V E} : EdgePath G x y → EdgePath G x y → Type where
+inductive homotopy {G : Graph V E} : EdgePath G x y → EdgePath G x y → Sort where
 | consht : (x : V) → homotopy (single x) (single x)
 | cancel : (ex : E) → {w x y : V} → (p : EdgePath G x y) → 
            (h : x = G.init ex) → { h1 : term G ex = w} → 
@@ -90,20 +93,16 @@ inductive homotopy {G : Graph V E} : EdgePath G x y → EdgePath G x y → Type 
          homotopy p q → (ex : E) →(h1 : y = term G ex) → { h : x = G.init ex} → 
          homotopy (cons ex (Eq.symm h) (Eq.symm h1) p) (cons ex (Eq.symm h) (Eq.symm h1) q)
 
-theorem homotopymult {G : Graph V E} {x y z : V} {p1 p2 : EdgePath G y z} {q : EdgePath G x y} (h :homotopy p1 p2):
-         (homotopy (multiply q p1) (multiply q p2)) :=
-    EdgePath.casesOn (motive :=  fun (x y : V) (q : EdgePath G x y) => 
-                                {z : V} → {p1 p2 : EdgePath G y z} → {q : EdgePath G x y} → 
-                                (h : homotopy p1 p2) →  homotopy (multiply q p1) (multiply q p2)) q
-(
-  by
-  intro a b c p q r h1 
-  have h2 : (multiply r p) = p := by
 
-  rfl
-)
-(
-
-)
-#check @EdgePath.casesOn
-
+theorem homotopymult {V : Type} {E : Type} {G : Graph V E} {x y z : V} (p1 p2 : EdgePath G y z) (q : EdgePath G x y) (h :homotopy p1 p2):
+         (homotopy (multiply q p1) (multiply q p2)) := by
+         induction q with
+        | single w  => have h7 : (multiply (single w) p1) = p1 := by rfl
+                       have h8 : (multiply (single w) p2) = p2 := by rfl
+                       exact h7 ▸ h8 ▸ h
+        | cons ex h1 h2 exy ih => 
+        have h7 : (cons ex h1 h2 (multiply exy p1)) = (multiply (cons ex h1 h2 exy) p1) := by rfl
+        have h8 : cons ex h1 h2 (multiply exy p2) = multiply (cons ex h1 h2 exy) p2 := by rfl
+        have h9 : homotopy (cons ex h1 h2 (multiply exy p1)) (cons ex h1 h2 (multiply exy p2)) := by
+        exact homotopy.mult (ih p1 p2 h) ex (Eq.symm h2) h1
+   
