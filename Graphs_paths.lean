@@ -127,10 +127,10 @@ theorem homotopy_left_mult {G : Graph V E} {x y z : V} (p1 p2 : EdgePath G y z) 
         | cons ex h1 h2 exy ih => 
          simp[homotopy.mult (ih p1 p2 h) ex h1 h2, multiply]-/
 
-theorem homotopy_reducepath {G : Graph V E} {x y : V} (p1 p2 : EdgePath G x y) (ih : p2.length ≤ p1.length)
+/-theorem homotopy_reducepath {G : Graph V E} {x y : V} (p1 p2 : EdgePath G x y) (ih : p2.length ≤ p1.length)
         (h : reducePath p1 = p2) : homotopy p1 p2 := by
         let c := p1.length
         induction c with
         | zero => have: p2.length = 0 := by 
           match p1 with
-          | single x => 
+          | single x => -/
