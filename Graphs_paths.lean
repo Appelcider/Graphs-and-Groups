@@ -11,7 +11,7 @@ variable {V: Type}{E: Type}[DecidableEq V][DecidableEq E]
   fun e => graph.init (graph.bar e)
 
 inductive EdgePath (graph: Graph V E): V → V → Type where
-  | single : (x: V) → EdgePath graph v v
+  | single : (x: V) → EdgePath graph x x 
   | cons : {x y z : V} → (e : E) → graph.init e = x → term graph e = y →  
         EdgePath graph y z → EdgePath graph x z
 
@@ -48,7 +48,7 @@ theorem mult_assoc {G : Graph V E} (p : EdgePath G w x) (q : EdgePath G x y) (r 
 theorem mult_const {G : Graph V E} {p : EdgePath G x y} : 
       (multiply p (single y)) = p := by
       induction p with
-      | single x => simp [multiply] ; sorry
+      | single x => simp [multiply] 
       | cons ex h1 h2 exy ih => simp[multiply, ih] 
 
 -- reverses an edgepath
@@ -56,40 +56,33 @@ def inverse {G : Graph V E} {x y : V}: (EdgePath G x y) → (EdgePath G y x)
 | single x => single x 
 | cons ex h1 h2 exy => multiply (inverse exy) (cons (G.bar (ex)) h2 (lemma1 h1) (single x)) 
 
-open Nat
+def reducePath0 {G : Graph V E} {x y : V}: (p : EdgePath G x y) →  { rp : EdgePath G x y // rp.length ≤ p.length} 
+| single x => ⟨ single x, by simp⟩ 
+| cons ex h1 h2 exy => by
+ cases exy with
+ | single x => exact ⟨cons ex h1 h2 (single y), by simp⟩ 
+ | cons ey h3 h4 eyz => 
+   apply
+  if c : (x = term G ey) ∧ (ey = G.bar (ex)) then
+  ⟨ Eq.symm (Eq.trans (And.left c) h4) ▸ eyz, by 
+      have h5 : (Eq.symm (Eq.trans (And.left c) h4) ▸ eyz).length = eyz.length := by sorry
+      simp[EdgePath.length, h5, Nat.le_trans (Nat.le_succ (length eyz)) (Nat.le_succ (length eyz +1))]
+  ⟩ 
+  else
+  ⟨ cons ex h1 h2 (cons ey h3 h4 (eyz)), by sorry⟩ 
 
 -- reduces given path such that no two consecutive edges are inverses of each other
-def reducePath {G : Graph V E} {x y : V} : (p : EdgePath G x y )→ 
-  {rp : EdgePath G x y // rp.length ≤ p.length}
-| single x => ⟨single x, by apply Nat.le_refl⟩
-| cons ex h1 h2 (single y) => ⟨cons ex h1 h2 (single y), by apply Nat.le_refl⟩
-| cons ex h1 h2 (cons ey h3 h4 (eyz)) => 
-    have h5: length eyz < length (cons ex h1 h2 (cons ey h3 h4 eyz)) := by 
-      simp[EdgePath.length , Nat.lt_trans (Nat.lt_succ_self (length eyz) ) (Nat.lt_succ_self (length eyz +1))]
-    let ⟨eyz', ih⟩ := reducePath eyz 
-    if c : (x = term G ey) ∧ (ey = G.bar (ex)) then
-      ⟨Eq.symm (Eq.trans (And.left c) h4) ▸ eyz', by
-      have h6 : length (Eq.symm (Eq.trans (And.left c) h4) ▸ eyz') = length (eyz') := by sorry--simp[EdgePath.length]
-      rw[h6]
-      exact Nat.le_trans ih (Nat.le_of_lt h5)
-      ⟩
-    else
-      have : length (cons ey h3 h4 eyz') < length (cons ex h1 h2 (cons ey h3 h4 eyz)) := by 
-       simp[EdgePath.length, Nat.lt_succ_of_le (Nat.succ_le_succ ih)] 
-      let ⟨prev, ih'⟩ := reducePath (cons ey h3 h4 (eyz'))
-      if d : prev.length < (cons ey h3 h4 (eyz')).length then
-      have h8 : 
-        length (cons ex h1 h2 prev) <
-          length (cons ex h1 h2 (cons ey h3 h4 eyz)) := by 
-           simp[EdgePath.length]
-           have h9 : (cons ey h3 h4 (eyz')).length ≤ length eyz + 1 := by 
-            simp[EdgePath.length, Nat.succ_le_succ ih] 
-           exact Nat.succ_lt_succ (Nat.lt_of_lt_of_le d h9 ) 
-      let ⟨rp, pf⟩ := reducePath (cons ex h1 h2 (prev))
-      ⟨rp, Nat.le_of_lt (Nat.lt_of_le_of_lt pf h8)⟩
-      else 
-      ⟨cons ex h1 h2 (cons ey h3 h4 (eyz)), by apply Nat.le_refl⟩
+def reducePath {G : Graph V E} : (p : EdgePath G x y ) → 
+  {rp : EdgePath G x y // rp.length ≤ p.length} 
+| single x => ⟨single x, by simp⟩
+| cons ex h1 h2 ey'y => 
+  have h5': length ey'y < length (cons ex h1 h2 ey'y) := by simp[EdgePath.length, Nat.lt_succ_self]
+  let ⟨ey'z, ih1⟩ := reducePath ey'y 
+  let ⟨ ez, ih⟩ := reducePath0 (cons ex h1 h2 ey'z) 
+  ⟨ ez , by sorry ⟩ 
 termination_by _ _ _ _ p => p.length
+
+
 
 --defines homotopy of edgepaths
 inductive homotopy {G : Graph V E} : EdgePath G x y → EdgePath G x y → Sort where
@@ -127,10 +120,20 @@ theorem homotopy_left_mult {G : Graph V E} {x y z : V} (p1 p2 : EdgePath G y z) 
         | cons ex h1 h2 exy ih => 
          simp[homotopy.mult (ih p1 p2 h) ex h1 h2, multiply]-/
 
+
+
 /-theorem homotopy_reducepath {G : Graph V E} {x y : V} (p1 p2 : EdgePath G x y) (ih : p2.length ≤ p1.length)
-        (h : reducePath p1 = p2) : homotopy p1 p2 := by
-        let c := p1.length
-        induction c with
-        | zero => have: p2.length = 0 := by 
-          match p1 with
-          | single x => -/
+        (h : (reducePath p1).1 = p2) : homotopy p1 p2 := by
+        induction p1 with
+        | single x => 
+          have h1 : ( @reducePath V E _ _ x x G (single x)).1 = single x  := by rfl
+          have h2 : single x = p2 := by simp[(Eq.symm h1), h]
+          have h3 : @homotopy V E G x x (single x) (single x) := by exact homotopy.consht x
+          exact h2 ▸ h3
+        | cons ex h1 h2 exy ih' => 
+          have h1' : homotopy (reducePath exy) exy := by sorry
+          let p3 := @reducePath0 V E _ _ G _ _ (cons ex h1 h2 (reducePath exy).1)
+          have h2' : homotopy p3.1 (cons ex h1 h2 (reducePath exy).1) := by sorry
+          have h3' : (@reducePath V E _ _ _ _ G (cons ex h1 h2 exy)).1 = p3.1 := by rfl
+-/
+
